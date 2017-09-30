@@ -1,0 +1,91 @@
+-- ----------------------------------------------------
+-- Ejemplo 1.
+-- ----------------------------------------------------
+DROP TABLE Movimientos;
+DROP TABLE Cuentas;
+
+CREATE TABLE Cuentas (
+  Cta  VARCHAR2(10) PRIMARY KEY,
+  Titular VARCHAR2(10),
+  Saldo NUMBER(10,2)
+);
+
+CREATE TABLE Movimientos (
+  Cta VARCHAR2(10) REFERENCES Cuentas,
+  NumMto NUMBER(10,0),
+  Fecha DATE,
+  Importe NUMBER(10,2) NOT NULL,
+  CONSTRAINT movimientos_pk PRIMARY KEY (Cta, NumMto)
+);
+
+INSERT INTO Cuentas VALUES ('37','012345678X',1500.00);
+INSERT INTO Cuentas VALUES ('44','012345678X',2300.00);
+
+DECLARE
+  vImporte NUMBER := 400;
+  vExisteDestino NUMBER;
+  vSaldo Cuentas.Saldo%TYPE;
+BEGIN
+  SELECT Saldo INTO vSaldo FROM Cuentas WHERE Cta = '37';
+  IF vSaldo > vImporte THEN
+    -- INICIO DE TRANSACCION. -- Cargo en la cta. de origen.
+    INSERT INTO Movimientos VALUES ('37', 4, SYSDATE, -vImporte);
+    UPDATE Cuentas SET Saldo = Saldo - vImporte WHERE Cta = '37';
+  
+    -- Si existe la cta. destino, abono en la cta. destino.
+    SELECT COUNT(*) INTO vExisteDestino
+    FROM Cuentas WHERE Cta = '44';
+    IF vExisteDestino > 0 THEN
+      INSERT INTO Movimientos VALUES ('44',3,SYSDATE,vImporte);
+      UPDATE Cuentas SET Saldo = Saldo + vImporte WHERE Cta='44';
+      COMMIT; -- FIN DE TRANSACCION: confirma los cambios.
+    ELSE
+      ROLLBACK; -- FIN DE TRANSACCION: deshace los cambios.
+    END IF;
+  END IF;
+END;
+/
+
+-- ----------------------------------------------------
+-- Ejemplo 2.
+-- ----------------------------------------------------
+-- ¿Cuál es el estado de la BD después de ejecutar las siguientes sentencias?
+
+DROP TABLE empl; 
+CREATE TABLE empl (
+  NIF VARCHAR2(9) PRIMARY KEY,
+  NOMBRE VARCHAR2(20),
+  SALARIO NUMBER(8,2)
+);
+
+INSERT INTO empl VALUES ('10A','Jorge Perez',3000.11);
+ROLLBACK;
+INSERT INTO empl VALUES ('30C','Javier Sala',2000.22);
+INSERT INTO empl VALUES ('30C','Soledad Lopez',2000.33);
+INSERT INTO empl VALUES ('40D','Sonia Moldes',1800.44);
+INSERT INTO empl VALUES ('50E','Antonio Lopez',1800.44);
+COMMIT;
+INSERT INTO empl VALUES ('70C','Soledad Martin',2000.33);
+
+SELECT * FROM empl; -- (verlo en cada una de las sentencias anteriores)
+
+-- ¿Cuál es el estado de la BD visible desde otras sesiones?}  
+-- (desde otra conexion)
+
+SELECT * FROM empl;
+
+-- ----------------------------------------------------
+-- Ejemplo 3.
+-- ----------------------------------------------------
+
+-- ¿Cuál es el estado de la BD después de ejecutar las siguientes sentencias?
+
+SET TRANSACTION NAME 'sal_update';
+UPDATE empl SET salario = 7000 WHERE NIF= '30C';
+
+SAVEPOINT after_salario;
+UPDATE empl SET salario = 12000 WHERE NIF= '40D';
+
+ROLLBACK TO SAVEPOINT after_salario;
+UPDATE empl SET salario = 11000 WHERE NIF= '40D';
+COMMIT;
